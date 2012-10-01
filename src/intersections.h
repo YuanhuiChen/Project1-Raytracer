@@ -11,7 +11,9 @@
 #include "glm/glm.hpp"
 #include "utilities.h"
 #include <thrust/random.h>
-
+#define ANGTORAD 0.01745329251994
+#define boxEpsilon 0.0005
+#define sphereEpsilon 0.0001
 //Some forward declarations
 __host__ __device__ glm::vec3 getPointOnRay(ray r, float t);
 __host__ __device__ glm::vec3 multiplyMV(cudaMat4 m, glm::vec4 v);
@@ -43,7 +45,7 @@ __host__ __device__ bool epsilonCheck(float a, float b){
 
 //Self explanatory
 __host__ __device__ glm::vec3 getPointOnRay(ray r, float t){
-  return r.origin + float(t-.0001)*glm::normalize(r.direction);
+  return r.origin + float(t - 0.0005)*glm::normalize(r.direction);
 }
 
 //LOOK: This is a custom function for multiplying cudaMat4 4x4 matrixes with vectors. 
@@ -72,7 +74,211 @@ __host__ __device__ glm::vec3 getSignOfRay(ray r){
 //Cube intersection test, return -1 if no intersection, otherwise, distance to intersection
 __host__ __device__  float boxIntersectionTest(staticGeom box, ray r, glm::vec3& intersectionPoint, glm::vec3& normal){
 
-    return -1;
+	//size = 1.0
+	glm::vec3 ro = multiplyMV(box.inverseTransform, glm::vec4(r.origin, 1.0f));
+	glm::vec3 rd = glm::normalize(multiplyMV(box.inverseTransform, glm::vec4(r.direction, 0.0f)));
+	ray rt; rt.origin = ro; rt.direction = rd;
+	   
+
+	int trace_min = -1, trace_max = -1; // 0 x-0.5 1 x0.5 2 y-0.5 3 y0.5 4 z-0.5 5 z0.5
+	float min = -1000000, max = 10000000;
+	float tmpmin, tmpmax;
+	//x planes
+
+	if(epsilonCheck(rd.x, 0))
+	{
+		if(ro.x < -0.5 || ro.x > 0.5)
+			return -1;
+	}
+	else
+	{
+		float tmp1 = (-0.5 - ro.x) / (rd.x);
+		float tmp2 = (0.5 - ro.x ) / (rd.x);
+
+	
+
+		float tmp_trace_min = 0;
+		tmpmin = tmp1;
+		if(tmpmin > tmp2)
+		{
+			tmp_trace_min = 1;
+			tmpmin = tmp2;
+		}
+
+		float tmp_trace_max = 1;
+		tmpmax = tmp2;
+		if(tmpmax < tmp1)
+		{
+			tmp_trace_max = 0;
+			tmpmax = tmp1;
+		}
+
+
+		if(tmpmax < float(boxEpsilon))
+			return -1;
+		//if(tmpmin > max || tmpmax < min)
+			//return -1;
+
+		if(min < tmpmin)
+		{
+			trace_min = tmp_trace_min;
+			min = glm::max(tmpmin,0.0f);
+		}
+
+		if(max > tmpmax)
+		{
+			trace_max = tmp_trace_max;
+			max = tmpmax;
+		}
+
+	}
+
+	
+
+	if(epsilonCheck(rd.y, 0))
+	{
+		if(ro.y < -0.5 || ro.y > 0.5)
+			return -1;
+	}
+	else
+	{
+
+		float tmp1 = (-0.5 - ro.y) / (rd.y);
+		float tmp2 = (0.5 - ro.y) / (rd.y);
+		
+		float tmp_trace_min = 2;
+		tmpmin = tmp1;
+		if(tmpmin > tmp2)
+		{
+			tmp_trace_min = 3;
+			tmpmin = tmp2;
+		}
+
+		float tmp_trace_max = 3;
+		tmpmax = tmp2;
+		if(tmpmax < tmp1)
+		{
+			tmp_trace_max = 2;
+			tmpmax = tmp1;
+		}
+
+		if(tmpmax < float(boxEpsilon))
+			return -1;
+
+		if(tmpmin > max || tmpmax < min)
+			return -1;
+
+		if(min < tmpmin)
+		{
+			trace_min = tmp_trace_min;
+			min = glm::max(tmpmin,0.0f);
+		}
+
+		if(max > tmpmax)
+		{
+			trace_max = tmp_trace_max;
+			max = tmpmax;
+		}
+		
+	}
+
+
+	if(epsilonCheck(rd.z,0))
+	{
+		if(ro.z < -0.5 || ro.z > 0.5)
+			return -1;
+	}
+	else
+	{
+
+		float tmp1 = (-0.5 - ro.z) / (rd.z);
+		float tmp2 = (0.5 - ro.z) / (rd.z);
+		
+
+		
+		float tmp_trace_min = 4;
+		tmpmin = tmp1;
+		if(tmpmin > tmp2)
+		{
+			tmp_trace_min = 5;
+			tmpmin = tmp2;
+		}
+
+		float tmp_trace_max = 5;
+		tmpmax = tmp2;
+		if(tmpmax < tmp1)
+		{
+			tmp_trace_max = 4;
+			tmpmax = tmp1;
+		}
+
+		if(tmpmax < float(boxEpsilon))
+			return -1;
+
+		if(tmpmin > max || tmpmax < min)
+			return -1;
+
+		if(min < tmpmin)
+		{
+			trace_min = tmp_trace_min;
+			min = glm::max(tmpmin,0.0f);
+		}
+
+		if(max > tmpmax)
+		{
+			trace_max = tmp_trace_max;
+			max = tmpmax;
+		}
+
+	}
+
+
+	int t;
+	if(min >= 0)
+	{
+		intersectionPoint = getPointOnRay(rt, min);
+		t = trace_min;
+		
+	}
+	else
+	{
+		t = trace_max;
+		intersectionPoint = getPointOnRay(rt, max);
+		
+	}
+
+		switch(t)
+		{
+		case 0: normal = glm::vec3(-1,0,0);
+			break;
+		case 1: normal = glm::vec3(1,0,0);
+			break;
+		case 2: normal = glm::vec3(0,-1,0);
+			break;
+		case 3: normal = glm::vec3(0,1,0);
+			break;
+		case 4: normal = glm::vec3(0,0,-1);
+			break;
+		case 5: normal = glm::vec3(0,0,1);
+			break;
+		}
+
+
+	//value[index] = normal;
+
+	
+	if(min < 0)
+		normal *= -1;
+
+	glm::vec3 realIntersectionPoint = multiplyMV(box.transform, glm::vec4(intersectionPoint, 1.0));
+	intersectionPoint = realIntersectionPoint;
+	normal = multiplyMV(box.transform, glm::vec4(normal,0.0));
+	normal = glm::normalize(normal);
+
+	return glm::length(r.origin - realIntersectionPoint);
+
+
+    
 }
 
 //LOOK: Here's an intersection test example from a sphere. Now you just need to figure out cube and, optionally, triangle.
@@ -88,7 +294,7 @@ __host__ __device__  float sphereIntersectionTest(staticGeom sphere, ray r, glm:
   
   float vDotDirection = glm::dot(rt.origin, rt.direction);
   float radicand = vDotDirection * vDotDirection - (glm::dot(rt.origin, rt.origin) - pow(radius, 2));
-  if (radicand < 0){
+  if (radicand < float(sphereEpsilon)){
     return -1;
   }
   
@@ -113,6 +319,92 @@ __host__ __device__  float sphereIntersectionTest(staticGeom sphere, ray r, glm:
   normal = glm::normalize(realIntersectionPoint - realOrigin);   
         
   return glm::length(r.origin - realIntersectionPoint);
+}
+
+
+__host__ __device__ glm::vec2 sphereTextureMap(staticGeom& sphere, glm::vec3& intersectionPoint)
+{
+	
+	glm::vec3 localintersect = multiplyMV(sphere.inverseTransform, glm::vec4(intersectionPoint,1.0f));
+	glm::vec2 uv;
+	glm::vec3 N = glm::normalize(localintersect);
+	
+	glm::vec3 up = glm::vec3(0, 1.0 ,0);
+	glm::vec3 forward = glm::vec3(0,0,1);
+
+	float phi = max(acos(glm::dot(up,N)),0.0f);
+	uv.y = phi / PI;
+
+	float tmp = glm::dot(N,forward) / sin(phi);
+	tmp = tmp > 1.0 ? 1.0 : tmp;
+	tmp = tmp < -1.0 ? -1.0 : tmp;
+
+	float theta = acos(tmp) / (2.0 * PI);
+	theta = theta > 1.0 ? 1.0 : theta;
+
+	if(glm::dot(glm::cross(up, forward), N) > 0.0)
+	    uv.x= theta;
+	else
+		uv.x= 1.0 -theta;
+
+	return uv;
+	
+	/*glm::vec3 localintersect = multiplyMV(sphere.inverseTransform, glm::vec4(intersectionPoint,1.0f));
+	glm::vec2 uv;
+	glm::vec4 N = glm::vec4(localintersect, 0);
+	glm::vec4 up = glm::vec4(0, 1.0 ,0,0);
+	glm::vec4 forward = glm::vec4(0,0,1,0);
+
+	float phi = acos(glm::dot(up,N));
+	uv.y = phi / PI;
+
+	float tmp = glm::dot(N,forward) / sin(phi);
+	tmp = tmp > 1.0 ? 1.0 : tmp;
+	tmp = tmp < -1.0 ? -1.0 : tmp;
+
+	float theta = acos(tmp) / (2.0 * PI);
+	theta = theta > 1.0 ? 1.0 : theta;
+
+	if(glm::dot(glm::cross(glm::vec3(up),glm::vec3(forward)), glm::vec3(N)) > 0.0)
+	    uv.x= theta;
+	else
+		uv.x= 1.0 -theta;
+
+	return uv;*/
+}
+
+__host__ __device__ glm::vec2 boxTextureMap(staticGeom& box, glm::vec3 & intersectionPoint)
+{
+	glm::vec3 localintersect = multiplyMV(box.inverseTransform, glm::vec4(intersectionPoint,1.0f));
+	glm::vec2 uv;
+
+	if(fabs(localintersect.x + 0.5f) < 0.01 || fabs(localintersect.x - .5f) < 0.01)
+	{
+	uv.x = glm::max(localintersect.y + 0.5f, 0.0f);
+	uv.x = glm::min(uv.x,0.99999f);
+	uv.y = glm::max(localintersect.z + 0.5f, 0.0f);
+	uv.y = glm::min(uv.y,0.99999f);
+	}
+
+	if(fabs(localintersect.y + 0.5f) < 0.01 || fabs(localintersect.y - .5f) < 0.01)
+	{
+	uv.x = glm::max(localintersect.x + 0.5f, 0.0f);
+	uv.x = glm::min(uv.x,0.99999f);
+	uv.y = glm::max(localintersect.z + 0.5f, 0.0f);
+	uv.y = glm::min(uv.y,0.99999f);
+	}
+
+	if(fabs(localintersect.z + 0.5f) < 0.01 || fabs(localintersect.z - .5f) < 0.01)
+	{
+	uv.x = glm::max(localintersect.x + 0.5f, 0.0f);
+	uv.x = glm::min(uv.x,0.99999f);
+	uv.y = glm::max(0.5f -localintersect.y , 0.0f);
+	uv.y = glm::min(uv.y,0.99999f);
+
+	}
+
+
+	return uv;
 }
 
 //returns x,y,z half-dimensions of tightest bounding box
@@ -177,6 +469,8 @@ __host__ __device__ glm::vec3 getRandomPointOnCube(staticGeom cube, float random
 //Generates a random point on a given sphere
 __host__ __device__ glm::vec3 getRandomPointOnSphere(staticGeom sphere, float randomSeed){
 
+
+  
   return glm::vec3(0,0,0);
 }
 

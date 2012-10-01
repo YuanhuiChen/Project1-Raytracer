@@ -39,4 +39,8 @@
       <UniqueIdentifier>{011aa553-95e8-4e59-b7ff-1bb89aebe21d}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
+  <ItemGroup>
+    <None Include="scene.txt" />
+    <None Include="..\..\README.md" />
+  </ItemGroup>
 </Project>

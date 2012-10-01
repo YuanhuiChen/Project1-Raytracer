@@ -16,6 +16,14 @@ enum GEOMTYPE{ SPHERE, CUBE, MESH };
 struct ray {
 	glm::vec3 origin;
 	glm::vec3 direction;
+	bool inside;
+};
+
+struct Map{
+	unsigned char * mapptr;
+	int width;
+	int height;
+	int depth;
 };
 
 struct geom {
@@ -27,11 +35,15 @@ struct geom {
 	glm::vec3* scales;
 	cudaMat4* transforms;
 	cudaMat4* inverseTransforms;
+	int noramlmapId;
+	int texturemapId;
 };
 
 struct staticGeom {
 	enum GEOMTYPE type;
 	int materialid;
+	int normalmapid;
+	int texturemapid;
 	glm::vec3 translation;
 	glm::vec3 rotation;
 	glm::vec3 scale;

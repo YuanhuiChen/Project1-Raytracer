@@ -6,7 +6,6 @@
 //       Yining Karl Li's TAKUA Render, a massively parallel pathtracing renderer: http://www.yiningkarlli.com
 
 #include "main.h"
-
 //-------------------------------
 //-------------MAIN--------------
 //-------------------------------
@@ -22,14 +21,31 @@ int main(int argc, char** argv){
   #endif
 
   // Set up pathtracer stuff
+
+
+
+
+
   bool loadedScene = false;
   finishedRender = false;
 
   targetFrame = 0;
   singleFrameMode = false;
 
+ string header;
+ cout<<"please input configure file name"<<endl;
+ cin>>header;
+
+ renderScene = new scene(header);
+ loadedScene = true;
+  /***************************************************************************/
+
+/****************************************************************************/
+
+
+
   // Load scene file
-  for(int i=1; i<argc; i++){
+ /* for(int i=1; i<argc; i++){
     string header; string data;
     istringstream liness(argv[i]);
     getline(liness, header, '='); getline(liness, data, '=');
@@ -40,10 +56,11 @@ int main(int argc, char** argv){
       targetFrame = atoi(data.c_str());
       singleFrameMode = true;
     }
-  }
+  }*/
+
 
   if(!loadedScene){
-    cout << "Error: scene file needed!" << endl;
+    std::cout << "Error: scene file needed!" << std::endl;
     return 0;
   }
 
@@ -65,11 +82,13 @@ int main(int argc, char** argv){
   #else
 	init(argc, argv);
   #endif
-
+	 initMaps();
   initCuda();
 
   initVAO();
   initTextures();
+ 
+ 
 
   GLuint passthroughProgram;
   passthroughProgram = initShader("shaders/passthroughVS.glsl", "shaders/passthroughFS.glsl");
@@ -90,7 +109,10 @@ int main(int argc, char** argv){
   #else
 	  glutDisplayFunc(display);
 	  glutKeyboardFunc(keyboard);
-
+	  glutMouseFunc(mouse);
+	  glutMotionFunc(motion);
+	  glutSpecialFunc(processSpecialKeys);
+	  //glutMouseWheelFunc(mousewheel);
 	  glutMainLoop();
   #endif
   return 0;
@@ -109,22 +131,26 @@ void runCuda(){
     uchar4 *dptr=NULL;
     iterations++;
     cudaGLMapBufferObject((void**)&dptr, pbo);
-  
+
     //pack geom and material arrays
     geom* geoms = new geom[renderScene->objects.size()];
     material* materials = new material[renderScene->materials.size()];
-    
+	Map * maps = new Map[renderScene->maps.size()];
     for(int i=0; i<renderScene->objects.size(); i++){
       geoms[i] = renderScene->objects[i];
     }
     for(int i=0; i<renderScene->materials.size(); i++){
       materials[i] = renderScene->materials[i];
     }
+	for(int i = 0; i < renderScene->maps.size(); i++){
+		maps[i] = renderScene->maps[i];
+	}
     
-  
+
     // execute the kernel
-    cudaRaytraceCore(dptr, renderCam, targetFrame, iterations, materials, renderScene->materials.size(), geoms, renderScene->objects.size() );
-    
+	
+	cudaRaytraceCore(dptr,renderCam, targetFrame, iterations, materials, renderScene->materials.size(), geoms, renderScene->objects.size(),maps,renderScene->maps.size() );
+
     // unmap buffer object
     cudaGLUnmapBufferObject(pbo);
   }else{
@@ -213,19 +239,161 @@ void runCuda(){
 
 		// VAO, shader program, and texture already bound
 		glDrawElements(GL_TRIANGLES, 6,  GL_UNSIGNED_SHORT, 0);
-
+		
 		glutPostRedisplay();
 		glutSwapBuffers();
 	}
 
+	
+	void motion(int x, int y)
+	{
+		if(rotating)
+		{
+			float rotX = (x - currentX) * rotateSpeed;
+			glm::clamp(rotX, minAngle,maxAngle);
+			float rotY = (y - currentY) * rotateSpeed;
+			glm::clamp(rotY, minAngle,maxAngle);
+			for(int i = 0; i < renderCam->frames; i++)
+			{
+				glm::mat4 rotationX(1.0),rotationY(1.0);
+				glm::vec3 right = glm::cross(renderCam->ups[i],renderCam->views[i]);
+				rotationY = glm::rotate(rotationY,rotY, right);
+				renderCam->ups[i] = glm::vec3(rotationY * glm::vec4(renderCam->ups[i],0));
+				renderCam->views[i] = glm::vec3(rotationY * glm::vec4(renderCam->views[i],0));
+				rotationX = glm::rotate(rotationX,rotX,renderCam->ups[i]);
+				renderCam->views[i] = glm::vec3(rotationX * glm::vec4(renderCam->views[i],0));
+					 
+			}
+			generateRayMap(renderCam,0);
+			iterations = 0;
+			clearImage();
+		}
+
+
+		if(dragging)
+		{
+			float dragX =( x - currentX ) * dragspeed;
+			float dragY = (y - currentY ) * dragspeed;
+
+			for(int i = 0; i < renderCam->frames; i++)
+			{
+				glm::vec3 right = glm::cross(renderCam->ups[i],renderCam->views[i]);
+				glm::mat4 dragR(1.0), dragUp(1.0);
+				dragR = glm::translate(dragR,dragX * right);
+				dragR = glm::translate(dragR, dragY * renderCam->ups[i]);
+
+				renderCam->positions[i] = glm::vec3(dragR * glm::vec4(renderCam->positions[i], 1.0f));
+			}
+
+			generateRayMap(renderCam,0);
+			iterations = 0;
+			clearImage();
+		}
+		currentX = x;
+		currentY = y;
+	}
+	void processSpecialKeys(int key, int xx, int yy) 
+	{
+
+		glm::mat4 dragMatrix(1.0);
+		switch (key) {
+		case GLUT_KEY_LEFT :
+			for(int i = 0 ; i < renderCam->frames; i++)
+			{
+			glm::vec3 right = glm::cross(renderCam->ups[i],renderCam->views[i]);
+	        dragMatrix = glm::translate(dragMatrix,-dragspeed * right);
+			renderCam->positions[i] = glm::vec3(dragMatrix * glm::vec4(renderCam->positions[i], 1.0f));
+			}
+			generateRayMap(renderCam,0);
+			iterations = 0;
+			clearImage();
+			break;
+		case GLUT_KEY_RIGHT :
+			for(int i = 0 ; i < renderCam->frames; i++)
+			{
+			glm::vec3 right = glm::cross(renderCam->ups[i],renderCam->views[i]);
+	        dragMatrix = glm::translate(dragMatrix,dragspeed * right);
+			renderCam->positions[i] = glm::vec3(dragMatrix * glm::vec4(renderCam->positions[i], 1.0f));
+			}
+			generateRayMap(renderCam,0);
+			iterations = 0;
+			clearImage();
+			break;
+		case GLUT_KEY_UP :
+			for(int i = 0 ; i < renderCam->frames; i++)
+			{
+				dragMatrix = glm::translate(dragMatrix,dragspeed * renderCam->ups[i]);
+			   renderCam->positions[i] = glm::vec3(dragMatrix * glm::vec4(renderCam->positions[i], 1.0f));
+			}
+			generateRayMap(renderCam,0);
+			iterations = 0;
+			clearImage();
+			break;
+		case GLUT_KEY_DOWN :
+			for(int i = 0 ; i < renderCam->frames; i++)
+			{
+				dragMatrix = glm::translate(dragMatrix,-dragspeed * renderCam->ups[i]);
+			   renderCam->positions[i] = glm::vec3(dragMatrix * glm::vec4(renderCam->positions[i], 1.0f));
+			}
+			generateRayMap(renderCam,0);
+			iterations = 0;
+			clearImage();
+			break;
+	}
+	}
+	void mouse(int button, int state, int x, int y)
+	{
+		if(glutGetModifiers() == GLUT_ACTIVE_ALT && button == GLUT_LEFT_BUTTON && state == GLUT_DOWN )
+		{
+			currentX = x;
+			currentY = y;
+			dragging = true;
+			return;
+		}
+
+		if(button == GLUT_LEFT_BUTTON && state == GLUT_DOWN)
+		{
+			currentX = x;
+			currentY = y;
+			rotating = true;
+			return;
+		}
+
+        dragging = false;
+		rotating = false;
+	}
+
 	void keyboard(unsigned char key, int x, int y)
 	{
+		glm::mat4 dragMatrix(1.0);
 		std::cout << key << std::endl;
 		switch (key) 
 		{
 		   case(27):
 			   exit(1);
 			   break;
+		   case('w'):
+			  
+			 for(int i = 0 ; i < renderCam->frames; i++)
+			{
+			   dragMatrix = glm::translate(dragMatrix,dragspeed * renderCam->views[i]);
+			   renderCam->positions[i] = glm::vec3(dragMatrix * glm::vec4(renderCam->positions[i], 1.0f));
+			}
+			generateRayMap(renderCam,0);
+			iterations = 0;
+			clearImage();
+			   break;
+		   case ('s'):
+			  
+			 for(int i = 0 ; i < renderCam->frames; i++)
+			{
+			   dragMatrix = glm::translate(dragMatrix,-1.0f * dragspeed * renderCam->views[i]);
+			   renderCam->positions[i] = glm::vec3(dragMatrix * glm::vec4(renderCam->positions[i], 1.0f));
+			}
+			generateRayMap(renderCam,0);
+			iterations = 0;
+			clearImage();
+		  break;
 		}
 	}
 
@@ -299,6 +467,12 @@ void initCuda(){
 
   initPBO(&pbo);
 
+
+  effectiveRayMap =new int[(int)renderCam->resolution.x *(int)renderCam->resolution.y];
+  bMap = new float[(int)renderCam->resolution.x *(int)renderCam->resolution.y];
+  initialRayMap = new ray[(int)renderCam->resolution.x * (int)renderCam->resolution.y];
+
+  generateRayMap(renderCam, targetFrame);
   // Clean up on program exit
   atexit(cleanupCuda);
 
@@ -312,6 +486,8 @@ void initTextures(){
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glTexImage2D( GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_BGRA,
         GL_UNSIGNED_BYTE, NULL);
+
+	
 }
 
 void initVAO(void){
@@ -350,6 +526,30 @@ void initVAO(void){
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
 }
 
+void initMaps()
+{
+    int count = 0;
+	for(int i = 0; i < renderScene->maps.size();i++)
+	{
+		count+= renderScene->maps[i].depth * renderScene->maps[i].height * renderScene->maps[i].width;
+	}
+
+	 allmaps = new unsigned char[count];
+	 mapsize = count;
+	 count =0;
+	 for(int i = 0; i < renderScene->maps.size();i++)
+	 {
+		 int total = renderScene->maps[i].depth * renderScene->maps[i].height * renderScene->maps[i].width;
+		 for(int j = 0; j < total; j++)
+		 {
+		 allmaps[count] = renderScene->maps[i].mapptr[j];
+		 count++;
+		 }
+
+		 delete renderScene->maps[i].mapptr;
+		 renderScene->maps[i].mapptr = NULL;
+	 }
+}
 GLuint initShader(const char *vertexShaderPath, const char *fragmentShaderPath){
     GLuint program = glslUtility::createProgram(vertexShaderPath, fragmentShaderPath, attributeLocations, 2);
     GLint location;
@@ -371,6 +571,15 @@ GLuint initShader(const char *vertexShaderPath, const char *fragmentShaderPath){
 void cleanupCuda(){
   if(pbo) deletePBO(&pbo);
   if(displayImage) deleteTexture(&displayImage);
+}
+
+void clearImage()
+{
+	int resolution = renderCam->resolution.x * renderCam->resolution.y;
+	for(int i = 0; i < resolution; i++)
+	{
+		renderCam->image[i] = glm::vec3(0,0,0);
+	}
 }
 
 void deletePBO(GLuint* pbo){

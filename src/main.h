@@ -15,6 +15,9 @@
 	#include <GL/glut.h>
 #endif
 
+
+//#include <stdio.h>
+
 #include <stdlib.h>
 #include <cuda_runtime.h>
 #include <cutil_inline.h>
@@ -27,16 +30,34 @@
 #include "glslUtility.h"
 #include "sceneStructs.h"
 #include "glm/glm.hpp"
+#include "glm/gtc/matrix_transform.hpp"
 #include "image.h"
 #include "raytraceKernel.h"
 #include "utilities.h"
 #include "scene.h"
 
+
+
 using namespace std;
+
+//INTERACTION
+int currentX = 0;
+int currentY = 0;
+float rotateSpeed = 0.02;
+float maxAngle = 40;
+float minAngle = -40;
+bool dragging = false;
+bool rotating = false;
+float dragspeed = 0.05;
 
 //-------------------------------
 //----------PATHTRACER-----------
 //-------------------------------
+int * effectiveRayMap = NULL;
+ray * initialRayMap = NULL;
+float * bMap = NULL; 
+unsigned char * allmaps = NULL;
+int mapsize = 0;
 
 scene* renderScene;
 camera* renderCam;
@@ -54,7 +75,6 @@ GLuint texcoordsLocation = 1;
 const char *attributeLocations[] = { "Position", "Tex" };
 GLuint pbo = (GLuint)NULL;
 GLuint displayImage;
-
 //-------------------------------
 //----------CUDA STUFF-----------
 //-------------------------------
@@ -78,6 +98,10 @@ void runCuda();
 #else
 	void display();
 	void keyboard(unsigned char key, int x, int y);
+	void processSpecialKeys(int key, int x, int y); 
+	void mouse(int button, int state, int x, int y);
+	void motion(int x, int y);
+	void mousewheel(int wheel, int direction, int x, int y);
 #endif
 
 //-------------------------------
@@ -94,6 +118,8 @@ void initPBO(GLuint* pbo);
 void initCuda();
 void initTextures();
 void initVAO();
+void initMaps();
+void clearImage();
 GLuint initShader(const char *vertexShaderPath, const char *fragmentShaderPath);
 
 //-------------------------------

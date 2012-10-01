@@ -13,7 +13,7 @@
 #include <sstream>
 #include <fstream>
 #include <iostream>
-
+#include "stb_image/stb_image.h"
 using namespace std;
 
 class scene{
@@ -22,12 +22,14 @@ private:
     int loadMaterial(string materialid);
     int loadObject(string objectid);
     int loadCamera();
+	int loadMap(string mapid);
 public:
     scene(string filename);
     ~scene();
 
     vector<geom> objects;
     vector<material> materials;
+	vector<Map> maps;
     camera renderCam;
 };
 

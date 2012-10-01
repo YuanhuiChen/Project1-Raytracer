@@ -26,6 +26,9 @@ scene::scene(string filename){
 				}else if(strcmp(tokens[0].c_str(), "CAMERA")==0){
 				    loadCamera();
 				    cout << " " << endl;
+				}else if(strcmp(tokens[0].c_str(), "MAP") == 0){
+					loadMap(tokens[1]);
+					cout << " " << endl;
 				}
 			}
 		}
@@ -76,9 +79,34 @@ int scene::loadObject(string objectid){
 	    newObject.materialid = atoi(tokens[1].c_str());
 	    cout << "Connecting Object " << objectid << " to Material " << newObject.materialid << "..." << endl;
         }
-        
+	//link normal map
+    getline(fp_in, line);
+	if(!line.empty() && fp_in.good()){
+	    vector<string> tokens = utilityCore::tokenizeString(line);
+		if(tokens.size() > 1)
+		{
+		newObject.noramlmapId = atoi(tokens[1].c_str());
+	    cout << "Connecting Object " << objectid << " to NormalMap " << newObject.materialid << "..." << endl;
+		}
+		else
+			newObject.noramlmapId = -1;
+        }
+
+	//link Texture Map
+	getline(fp_in, line);
+	if(!line.empty() && fp_in.good()){
+	    vector<string> tokens = utilityCore::tokenizeString(line);
+		if(tokens.size() > 1)
+		{
+			newObject.texturemapId = atoi(tokens[1].c_str());
+			cout << "Connecting Object " << objectid << " to NormalMap " << newObject.texturemapId << "..." << endl;
+		}
+		else
+			newObject.texturemapId = -1;
+        }
+
 	//load frames
-        int frameCount = 0;
+    int frameCount = 0;
 	getline(fp_in,line);
 	vector<glm::vec3> translations;
 	vector<glm::vec3> scales;
@@ -160,6 +188,8 @@ int scene::loadCamera(){
 	vector<glm::vec3> positions;
 	vector<glm::vec3> views;
 	vector<glm::vec3> ups;
+	vector<Map> normalMaps;
+	vector<Map> textureMaps;
         while (!line.empty() && fp_in.good()){
 	    
 	    //check frame number
@@ -180,6 +210,19 @@ int scene::loadCamera(){
 			views.push_back(glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str())));
 		}else if(strcmp(tokens[0].c_str(), "UP")==0){
 			ups.push_back(glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str())));
+		}
+		else if(strcmp(tokens[0].c_str(), "NORMALMAP") == 0){
+			if(tokens.size() > 1)
+			{
+			Map  tmpMap;
+			tmpMap.mapptr = stbi_load(tokens[1].c_str(),&tmpMap.width, &tmpMap.height,&tmpMap.depth,0);
+			normalMaps.push_back(tmpMap);
+			}
+		}
+		else if(strcmp(tokens[0].c_str(), "TEXTUREMAP") == 0){
+			Map  tmpMap;
+			tmpMap.mapptr = stbi_load(tokens[1].c_str(),&tmpMap.width, &tmpMap.height,&tmpMap.depth,0);
+			textureMaps.push_back(tmpMap);
 		}
 	    }
 	    
@@ -258,6 +301,30 @@ int scene::loadMaterial(string materialid){
 			}
 		}
 		materials.push_back(newMaterial);
+		return 1;
+	}
+}
+
+int scene::loadMap(string mapid)
+{
+	int id = atoi(mapid.c_str());
+	if(id!=maps.size()){
+		cout << "ERROR: MATERIAL ID does not match expected number of materials" << endl;
+		return -1;
+	}else{
+		cout << "Loading Map " << id << "..." << endl;
+		Map newMap;
+	
+		//load static properties
+	
+			string line;
+			getline(fp_in,line);
+			vector<string> tokens = utilityCore::tokenizeString(line);
+			if(strcmp(tokens[0].c_str(), "FILE")==0){
+				newMap.mapptr = stbi_load(tokens[1].c_str(),&newMap.width, &newMap.height,&newMap.depth,0);
+			}					  
+			
+		maps.push_back(newMap);
 		return 1;
 	}
 }
